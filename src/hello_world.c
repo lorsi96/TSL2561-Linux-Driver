@@ -1,6 +1,9 @@
 /*SPDX-License-Identifier: GPL-2.0*/
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/cdev.h>
+#include <linux/fs.h>
+#include <linux/device.h>
 #include <linux/kernel.h>
 
 MODULE_LICENSE("GPL");
@@ -8,7 +11,7 @@ MODULE_AUTHOR("Lucas Orsi");
 MODULE_DESCRIPTION("Simple Hello World Application");
 MODULE_VERSION("0.01");
 
-#define LOG_MAJOR false
+#define LOG_MAJOR 0
 
 #define DEVICE_NAME "TSL2561"
 #define CLASS_NAME "LightSensor_LinuxDriver"
@@ -53,7 +56,7 @@ static const struct file_operations tsl2561DevFops = {
 /* ************************************************************************* */
 static int __init tsl2561_init(void)
 {
-	int major, ret;
+	int ret;
 	struct device *tsl2561Device;
 	pr_info("TSL2561 Light Sensor Init\n");
 
@@ -68,7 +71,7 @@ static int __init tsl2561_init(void)
 
 #if LOG_MAJOR
 	/* Logs assigned major number. */
-	major = MAJOR(tls2561Dev);
+	int major = MAJOR(tls2561Dev);
 	dev = MKDEV(Major, DEV_MINOR_NUMBER);
 	pr_info("device allocated correctly with major number %d\n", major);
 #endif
@@ -98,7 +101,8 @@ static int __init tsl2561_init(void)
 
 	if (IS_ERR(tsl2561Device)) {
 		pr_info("Failed to create the device\n");
-		ret = PTR_ERR(tsl2561Device) goto TSL2561_FAIL_DEV_CREATION;
+		ret = PTR_ERR(tsl2561Device);
+		goto TSL2561_FAIL_DEV_CREATION;
 	}
 
 	pr_info("TLS2561 Device was created correctly\n");
