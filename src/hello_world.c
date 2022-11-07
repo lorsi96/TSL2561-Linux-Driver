@@ -11,20 +11,26 @@ MODULE_AUTHOR("Lucas Orsi");
 MODULE_DESCRIPTION("Simple Hello World Application");
 MODULE_VERSION("0.01");
 
-#define LOG_MAJOR 0
-
-#define DEVICE_NAME "TSL2561"
+/* ************************************************************************** */
+/*                              Module Constants                              */
+/* ************************************************************************** */
+#define DEVICE_NAME "tsl2561"
 #define CLASS_NAME "LightSensor_LinuxDriver"
 #define DEV_MINOR_NUMBER 0
 #define MINOR_BASE_NUMBER 0
+#define STATIC_MAJOR_BASE_NUMBER  202  /*Only if static cdev region is used.*/
 #define DEVICE_COUNT 1
 
+/* ************************************************************************** */
+/*                               Module Globals                               */
+/* ************************************************************************** */
 static struct cdev tls2561CDev;
 static struct class *tls2561Class;
 static dev_t tls2561Dev;
-/* ************************************************************************* */
-/*                              File Operations                              */
-/* ************************************************************************* */
+
+/* ************************************************************************** */
+/*                              File IO Handlers                              */
+/* ************************************************************************** */
 static int tsl2561_dev_open(struct inode *inode, struct file *file)
 {
 	pr_info("[%s] called.\n", __func__);
@@ -51,8 +57,42 @@ static const struct file_operations tsl2561DevFops = {
 	.unlocked_ioctl = tsl2561_dev_ioctl,
 };
 
+
+/* ************************************************************************** */
+/*                         Char Dev Region Strategies                         */
+/* ************************************************************************** */
+/**
+ * @brief Static allocation of char device.
+ * @param[out] dev_no obtained major version. Always the same for static alloc.
+ * @return int error code.
+ * @note this strategy of char dev region allocation is not ideal, since 
+ *      it runs the risk of using the same major number as an already existing
+ *      device. 
+ */
+int static_chrdev_region(dev_t* dev_no) {
+	int ret = register_chrdev_region(STATIC_MAJOR_BASE_NUMBER, DEVICE_COUNT,
+				  DEVICE_NAME);
+	if(ret < 0) {
+		return ret;
+	}
+	*dev_no = MKDEV(STATIC_MAJOR_BASE_NUMBER, DEV_MINOR_NUMBER);
+	return ret;
+}
+
+/**
+ * @brief Dynamic allocation of char device.
+ * 
+ * @param[out] dev_no obtained major version. Provided by the kernel. 
+ * @return int error code.
+ */
+int dynamic_chrdev_region(dev_t* dev_no) {
+	return alloc_chrdev_region(dev_no, MINOR_BASE_NUMBER, DEVICE_COUNT,
+				  DEVICE_NAME);
+}
+
+
 /* ************************************************************************* */
-/*                             Module Init & Exi                             */
+/*                             Module Init & Exit                            */
 /* ************************************************************************* */
 static int __init tsl2561_init(void)
 {
@@ -60,21 +100,13 @@ static int __init tsl2561_init(void)
 	struct device *tsl2561Device;
 	pr_info("TSL2561 Light Sensor Init\n");
 
-	/* Dynamic allocation of chardevice.*/
-
-	ret = alloc_chrdev_region(&tls2561Dev, MINOR_BASE_NUMBER, DEVICE_COUNT,
-				  DEVICE_NAME);
+	ret = dynamic_chrdev_region(&tls2561Dev);
 	if (ret < 0) {
 		pr_info("Unable to allocate device's major base number\n");
 		return ret;
 	}
+	pr_info("TSL2561 device allocated correctly with major number %d\n", MAJOR(tls2561Dev));
 
-#if LOG_MAJOR
-	/* Logs assigned major number. */
-	int major = MAJOR(tls2561Dev);
-	dev = MKDEV(Major, DEV_MINOR_NUMBER);
-	pr_info("device allocated correctly with major number %d\n", major);
-#endif
 
 	/* Initialize cdev structure and add it to kernel space. */
 	cdev_init(&tls2561CDev, &tsl2561DevFops);
@@ -121,6 +153,7 @@ TSL2561_FAIL_CDEV_CREATION:
 
 static void __exit tsl2561_exit(void)
 {
+	device_destroy(tls2561Class, tls2561Dev);
 	class_destroy(tls2561Class);
 	cdev_del(&tls2561CDev);
 	unregister_chrdev_region(tls2561Dev, DEVICE_COUNT);
