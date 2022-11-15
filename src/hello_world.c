@@ -28,6 +28,9 @@ static struct cdev tls2561CDev;
 static struct class *tls2561Class;
 static dev_t tls2561Dev;
 
+static struct miscdevice miscdev; 
+
+
 /* ************************************************************************** */
 /*                              File IO Handlers                              */
 /* ************************************************************************** */
@@ -90,12 +93,14 @@ int dynamic_chrdev_region(dev_t* dev_no) {
 				  DEVICE_NAME);
 }
 
+/* ************************************************************************* */
+/*                            Custom Class Device                            */
+/* ************************************************************************* */
+static struct cdev tls2561CDev;
+static struct class *tls2561Class;
+static dev_t tls2561Dev;
 
-/* ************************************************************************* */
-/*                             Module Init & Exit                            */
-/* ************************************************************************* */
-static int __init tsl2561_init(void)
-{
+int custom_class_register() {
 	int ret;
 	struct device *tsl2561Device;
 	pr_info("TSL2561 Light Sensor Init\n");
@@ -151,12 +156,45 @@ TSL2561_FAIL_CDEV_CREATION:
 	return ret;
 }
 
-static void __exit tsl2561_exit(void)
-{
+int custom_class_unregister() {
 	device_destroy(tls2561Class, tls2561Dev);
 	class_destroy(tls2561Class);
 	cdev_del(&tls2561CDev);
 	unregister_chrdev_region(tls2561Dev, DEVICE_COUNT);
+}
+
+/* ************************************************************************* */
+/*                               Misc Register                               */
+/* ************************************************************************* */
+int misc_framework_register() {
+	miscdev.minor = MINOR_BASE_NUMBER;
+	miscdev.name = DEVICE_NAME;
+	miscdev.fops = &tsl2561DevFops;
+
+	int ret_val = misc_register(&miscdev);
+	if (ret_val != 0) {
+		pr_err("Could not register misc device %s", DEVICE_NAME);
+		return ret_val;
+	}
+	return 0;
+}
+
+int misc_framework_unresgister() {
+    misc_deregister(&miscdev);
+}
+
+
+/* ************************************************************************* */
+/*                             Module Init & Exit                            */
+/* ************************************************************************* */
+static int __init tsl2561_init(void)
+{
+	misc_framework_register();
+}
+
+static void __exit tsl2561_exit(void)
+{
+	misc_deregister();
 }
 
 module_init(tsl2561_init);
