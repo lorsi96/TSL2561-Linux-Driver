@@ -4,6 +4,7 @@
 #include <linux/cdev.h>
 #include <linux/fs.h>
 #include <linux/device.h>
+#include <linux/miscdevice.h>
 #include <linux/kernel.h>
 
 MODULE_LICENSE("GPL");
@@ -18,7 +19,7 @@ MODULE_VERSION("0.01");
 #define CLASS_NAME "LightSensor_LinuxDriver"
 #define DEV_MINOR_NUMBER 0
 #define MINOR_BASE_NUMBER 0
-#define STATIC_MAJOR_BASE_NUMBER  202  /*Only if static cdev region is used.*/
+#define STATIC_MAJOR_BASE_NUMBER 202 /*Only if static cdev region is used.*/
 #define DEVICE_COUNT 1
 
 /* ************************************************************************** */
@@ -28,8 +29,7 @@ static struct cdev tls2561CDev;
 static struct class *tls2561Class;
 static dev_t tls2561Dev;
 
-static struct miscdevice miscdev; 
-
+static struct miscdevice miscdev;
 
 /* ************************************************************************** */
 /*                              File IO Handlers                              */
@@ -60,7 +60,6 @@ static const struct file_operations tsl2561DevFops = {
 	.unlocked_ioctl = tsl2561_dev_ioctl,
 };
 
-
 /* ************************************************************************** */
 /*                         Char Dev Region Strategies                         */
 /* ************************************************************************** */
@@ -72,10 +71,11 @@ static const struct file_operations tsl2561DevFops = {
  *      it runs the risk of using the same major number as an already existing
  *      device. 
  */
-int static_chrdev_region(dev_t* dev_no) {
+int static_chrdev_region(dev_t *dev_no)
+{
 	int ret = register_chrdev_region(STATIC_MAJOR_BASE_NUMBER, DEVICE_COUNT,
-				  DEVICE_NAME);
-	if(ret < 0) {
+					 DEVICE_NAME);
+	if (ret < 0) {
 		return ret;
 	}
 	*dev_no = MKDEV(STATIC_MAJOR_BASE_NUMBER, DEV_MINOR_NUMBER);
@@ -88,9 +88,10 @@ int static_chrdev_region(dev_t* dev_no) {
  * @param[out] dev_no obtained major version. Provided by the kernel. 
  * @return int error code.
  */
-int dynamic_chrdev_region(dev_t* dev_no) {
+int dynamic_chrdev_region(dev_t *dev_no)
+{
 	return alloc_chrdev_region(dev_no, MINOR_BASE_NUMBER, DEVICE_COUNT,
-				  DEVICE_NAME);
+				   DEVICE_NAME);
 }
 
 /* ************************************************************************* */
@@ -100,7 +101,8 @@ static struct cdev tls2561CDev;
 static struct class *tls2561Class;
 static dev_t tls2561Dev;
 
-int custom_class_register() {
+int custom_class_register(void)
+{
 	int ret;
 	struct device *tsl2561Device;
 	pr_info("TSL2561 Light Sensor Init\n");
@@ -110,8 +112,8 @@ int custom_class_register() {
 		pr_info("Unable to allocate device's major base number\n");
 		return ret;
 	}
-	pr_info("TSL2561 device allocated correctly with major number %d\n", MAJOR(tls2561Dev));
-
+	pr_info("TSL2561 device allocated correctly with major number %d\n",
+		MAJOR(tls2561Dev));
 
 	/* Initialize cdev structure and add it to kernel space. */
 	cdev_init(&tls2561CDev, &tsl2561DevFops);
@@ -156,45 +158,52 @@ TSL2561_FAIL_CDEV_CREATION:
 	return ret;
 }
 
-int custom_class_unregister() {
+int custom_class_unregister(void)
+{
 	device_destroy(tls2561Class, tls2561Dev);
 	class_destroy(tls2561Class);
 	cdev_del(&tls2561CDev);
 	unregister_chrdev_region(tls2561Dev, DEVICE_COUNT);
+	return 0;
 }
 
 /* ************************************************************************* */
 /*                               Misc Register                               */
 /* ************************************************************************* */
-int misc_framework_register() {
+int misc_framework_register(void)
+{
+	int ret_val;
 	miscdev.minor = MINOR_BASE_NUMBER;
 	miscdev.name = DEVICE_NAME;
 	miscdev.fops = &tsl2561DevFops;
 
-	int ret_val = misc_register(&miscdev);
+	ret_val = misc_register(&miscdev);
 	if (ret_val != 0) {
 		pr_err("Could not register misc device %s", DEVICE_NAME);
 		return ret_val;
 	}
+	pr_info("Successfully registered %s as misc device.", DEVICE_NAME);
 	return 0;
 }
 
-int misc_framework_unresgister() {
-    misc_deregister(&miscdev);
+int misc_framework_unresgister(void)
+{
+	misc_deregister(&miscdev);
+	pr_info("Successfully unregistered %s as misc device.", DEVICE_NAME);
+	return 0;
 }
-
 
 /* ************************************************************************* */
 /*                             Module Init & Exit                            */
 /* ************************************************************************* */
 static int __init tsl2561_init(void)
 {
-	misc_framework_register();
+	return misc_framework_register();
 }
 
 static void __exit tsl2561_exit(void)
 {
-	misc_deregister();
+	misc_framework_unresgister();
 }
 
 module_init(tsl2561_init);
