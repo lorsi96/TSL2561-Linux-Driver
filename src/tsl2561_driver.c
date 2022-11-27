@@ -1,39 +1,106 @@
-/*SPDX-License-Identifier: GPL-2.0*/
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/cdev.h>
 #include <linux/fs.h>
 #include <linux/device.h>
 #include <linux/miscdevice.h>
+#include <linux/i2c.h>
+#include <linux/types.h>
 #include <linux/kernel.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Lucas Orsi");
-MODULE_DESCRIPTION("Simple Hello World Application");
+MODULE_DESCRIPTION("TSL2561 Driver Example");
 MODULE_VERSION("0.01");
 
 /* ************************************************************************** */
 /*                              Module Constants                              */
 /* ************************************************************************** */
 #define DEVICE_NAME "tsl2561"
-#define CLASS_NAME "LightSensor_LinuxDriver"
-#define DEV_MINOR_NUMBER 0
 #define MINOR_BASE_NUMBER 0
-#define STATIC_MAJOR_BASE_NUMBER 202 /*Only if static cdev region is used.*/
-#define DEVICE_COUNT 1
 
-/* ************************************************************************** */
-/*                               Module Globals                               */
-/* ************************************************************************** */
-static struct cdev tls2561CDev;
-static struct class *tls2561Class;
-static dev_t tls2561Dev;
+static const struct of_device_id TSL2561_DT_IDS[] = {
+	{.compatible = "mse,"DEVICE_NAME},
+	{ /* sentinel*/}
+}
+/* ************************************************************************* */
+/*                                Module Types                               */
+/* ************************************************************************* */
+struct tsl2561_client {
+	struct miscdevice miscdev;
+	struct i2c_driver i2c_driver;
+	struct file_operations fileOps;
+	struct i2c_client *i2c_client;
+};
 
-static struct miscdevice miscdev;
+/* ************************************************************************* */
+/*                             Private Functions                             */
+/* ************************************************************************* */
+static int tsl2561_misc_fw_register(struct miscdevice* dev, 
+								    struct file_operations* fops);
+static int tsl2561_misc_fw_unregister(struct miscdevice* dev);
 
-/* ************************************************************************** */
-/*                              File IO Handlers                              */
-/* ************************************************************************** */
+static int tsl2561_dev_open(struct inode *inode, struct file *file);
+static int tsl2561_dev_close(struct inode *inode, struct file *file);
+static long tsl2561_dev_ioctl(struct file *file, unsigned int cmd,
+							  unsigned long arg);
+
+static int  tsl2561_probe(struct i2c_client *client, 
+						  const struct i2c_device_id *id);
+static int  tsl2561_remove(struct i2c_client *client);
+
+/* ************************************************************************* */
+/*                             Static Definitions                            */
+/* ************************************************************************* */
+static struct tsl2561_client __client = {
+	.fileOps = {
+		.owner = THIS_MODULE,
+		.open = tsl2561_dev_open,
+		.release = tsl2561_dev_close,
+		.unlocked_ioctl = tsl2561_dev_ioctl,
+	},
+	.miscdev = {
+		.minor = MINOR_BASE_NUMBER,
+		.name = DEVICE_NAME,
+		.fops = &__client.fileOps,
+	},
+	.i2c_driver = {
+		.probe = tsl2561_probe,
+		.remove = tsl2561_remove,
+		.name = DRIVER_NAME,
+		.owner = THIS_MODULE,
+		.of_match_table = of_match_ptr(TSL2561_DT_IDS),
+	}
+} 
+
+static int tsl2561_probe(struct i2c_client *client, 
+						  const struct i2c_device_id *id) {
+	int err_code = 0;
+
+	// Initialize misc framework device.
+	err_code = misc_register(&__client->miscdev);
+	if (err_code!= 0) {
+		pr_err("Could not register misc device %s", DEVICE_NAME);
+		return err_code;
+	}
+	pr_info("Successfully registered %s as misc device.", DEVICE_NAME);
+
+	// Save I2C client reference.
+	__client->i2c_client = i2c_client;
+
+	return err_code;
+}
+
+static int  tsl2561_remove(struct i2c_client *client){
+	misc_deregister(&__client->miscdev);
+	pr_info("Successfully unregistered %s as misc device.", DEVICE_NAME);
+	return 0;
+}
+
+
+/* ************************************************************************* */
+/*                                IO Handlers                                */
+/* ************************************************************************* */
 static int tsl2561_dev_open(struct inode *inode, struct file *file)
 {
 	pr_info("[%s] called.\n", __func__);
@@ -53,158 +120,8 @@ static long tsl2561_dev_ioctl(struct file *file, unsigned int cmd,
 	return 0;
 }
 
-static const struct file_operations tsl2561DevFops = {
-	.owner = THIS_MODULE,
-	.open = tsl2561_dev_open,
-	.release = tsl2561_dev_close,
-	.unlocked_ioctl = tsl2561_dev_ioctl,
-};
-
-/* ************************************************************************** */
-/*                         Char Dev Region Strategies                         */
-/* ************************************************************************** */
-/**
- * @brief Static allocation of char device.
- * @param[out] dev_no obtained major version. Always the same for static alloc.
- * @return int error code.
- * @note this strategy of char dev region allocation is not ideal, since 
- *      it runs the risk of using the same major number as an already existing
- *      device. 
- */
-int static_chrdev_region(dev_t *dev_no)
-{
-	int ret = register_chrdev_region(STATIC_MAJOR_BASE_NUMBER, DEVICE_COUNT,
-					 DEVICE_NAME);
-	if (ret < 0) {
-		return ret;
-	}
-	*dev_no = MKDEV(STATIC_MAJOR_BASE_NUMBER, DEV_MINOR_NUMBER);
-	return ret;
-}
-
-/**
- * @brief Dynamic allocation of char device.
- * 
- * @param[out] dev_no obtained major version. Provided by the kernel. 
- * @return int error code.
- */
-int dynamic_chrdev_region(dev_t *dev_no)
-{
-	return alloc_chrdev_region(dev_no, MINOR_BASE_NUMBER, DEVICE_COUNT,
-				   DEVICE_NAME);
-}
-
 /* ************************************************************************* */
-/*                            Custom Class Device                            */
+/*                            Driver Registration                            */
 /* ************************************************************************* */
-static struct cdev tls2561CDev;
-static struct class *tls2561Class;
-static dev_t tls2561Dev;
-
-int custom_class_register(void)
-{
-	int ret;
-	struct device *tsl2561Device;
-	pr_info("TSL2561 Light Sensor Init\n");
-
-	ret = dynamic_chrdev_region(&tls2561Dev);
-	if (ret < 0) {
-		pr_info("Unable to allocate device's major base number\n");
-		return ret;
-	}
-	pr_info("TSL2561 device allocated correctly with major number %d\n",
-		MAJOR(tls2561Dev));
-
-	/* Initialize cdev structure and add it to kernel space. */
-	cdev_init(&tls2561CDev, &tsl2561DevFops);
-	ret = cdev_add(&tls2561CDev, tls2561Dev, DEVICE_COUNT);
-
-	if (ret < 0) {
-		pr_info("Unable to add TLS2561 cdev\n");
-		goto TSL2561_FAIL_CDEV_CREATION;
-	}
-
-	/* Device class registration */
-	tls2561Class = class_create(THIS_MODULE, CLASS_NAME);
-
-	if (IS_ERR(tls2561Class)) {
-		pr_info("Failed to register device class\n");
-		goto TSL2561_FAIL_CLASS_CREATION;
-	}
-
-	pr_info("TLS2561 Device class registered correctly\n");
-
-	/* Node Creation under DEVICE_NAME. */
-	tsl2561Device = device_create(tls2561Class, NULL, tls2561Dev, NULL,
-				      DEVICE_NAME);
-
-	if (IS_ERR(tsl2561Device)) {
-		pr_info("Failed to create the device\n");
-		ret = PTR_ERR(tsl2561Device);
-		goto TSL2561_FAIL_DEV_CREATION;
-	}
-
-	pr_info("TLS2561 Device was created correctly\n");
-
-	return 0;
-
-	/* Error Handling - Hierarchical resources de-allocation. */
-TSL2561_FAIL_DEV_CREATION:
-	class_destroy(tls2561Class);
-TSL2561_FAIL_CLASS_CREATION:
-	cdev_del(&tls2561CDev);
-TSL2561_FAIL_CDEV_CREATION:
-	unregister_chrdev_region(tls2561Dev, DEVICE_COUNT);
-	return ret;
-}
-
-int custom_class_unregister(void)
-{
-	device_destroy(tls2561Class, tls2561Dev);
-	class_destroy(tls2561Class);
-	cdev_del(&tls2561CDev);
-	unregister_chrdev_region(tls2561Dev, DEVICE_COUNT);
-	return 0;
-}
-
-/* ************************************************************************* */
-/*                               Misc Register                               */
-/* ************************************************************************* */
-int misc_framework_register(void)
-{
-	int ret_val;
-	miscdev.minor = MINOR_BASE_NUMBER;
-	miscdev.name = DEVICE_NAME;
-	miscdev.fops = &tsl2561DevFops;
-
-	ret_val = misc_register(&miscdev);
-	if (ret_val != 0) {
-		pr_err("Could not register misc device %s", DEVICE_NAME);
-		return ret_val;
-	}
-	pr_info("Successfully registered %s as misc device.", DEVICE_NAME);
-	return 0;
-}
-
-int misc_framework_unresgister(void)
-{
-	misc_deregister(&miscdev);
-	pr_info("Successfully unregistered %s as misc device.", DEVICE_NAME);
-	return 0;
-}
-
-/* ************************************************************************* */
-/*                             Module Init & Exit                            */
-/* ************************************************************************* */
-static int __init tsl2561_init(void)
-{
-	return misc_framework_register();
-}
-
-static void __exit tsl2561_exit(void)
-{
-	misc_framework_unresgister();
-}
-
-module_init(tsl2561_init);
-module_exit(tsl2561_exit);
+MODULE_DEVICE_TABLE(of, TSL2561_DT_IDS);
+module_i2c_driver(__client->i2c_driver);
