@@ -18,6 +18,7 @@ MODULE_VERSION("0.01");
 /* ************************************************************************** */
 #define DEVICE_NAME "tsl2561"
 #define DRIVER_NAME "tsl2561"
+#define DEVICE_ADDRESS 0x39
 #define MINOR_BASE_NUMBER 0
 
 static const struct of_device_id TSL2561_DT_IDS[] = {
@@ -109,12 +110,33 @@ static int tsl2561_remove(struct i2c_client *client)
 	return 0;
 }
 
+/* ************************************************************************** */
+/*                                I2C Utilities                               */
+/* ************************************************************************** */
+static int tsl2561_read_reg(uint8_t reg)
+{
+	static uint8_t in, out;
+	static struct i2c_msg msg[] = {
+		{ .addr = DEVICE_ADDRESS, .flags = 0, .len = 1, .buf = &in },
+		{ .addr = DEVICE_ADDRESS,
+		  .flags = I2C_M_RD,
+		  .len = 1,
+		  .buf = &out }
+	};
+	in = reg;
+	i2c_transfer(__client.i2c_client->adapter, msg, 2);
+	return out;
+}
+
 /* ************************************************************************* */
 /*                                IO Handlers                                */
 /* ************************************************************************* */
 static int tsl2561_dev_open(struct inode *inode, struct file *file)
 {
+	uint8_t ver;
 	pr_info("[%s] called.\n", __func__);
+	ver = tsl2561_read_reg(0x0A);
+	pr_info("Chip Version [%x]\n", ver);
 	return 0;
 }
 
