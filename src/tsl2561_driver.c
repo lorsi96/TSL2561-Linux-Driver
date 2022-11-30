@@ -128,9 +128,29 @@ static int tsl2561_read_reg(uint8_t reg)
 	return out;
 }
 
+static int tsl2561_write_reg(uint8_t reg, uint8_t value)
+{
+	static struct i2c_msg msg[] = {
+		{ .addr = DEVICE_ADDRESS, .flags = 0, .len = 1, .buf = &reg},
+	};
+	i2c_transfer(__client.i2c_client->adapter, msg, 1);
+	return out;
+}
+
 /* ************************************************************************* */
 /*                                IO Handlers                                */
 /* ************************************************************************* */
+static struct {
+	enum { TSL2561_WR = 0, TSL2561_RD  = 1} cmd;
+	union {
+		struct {
+			short reg;
+			int val;
+		};
+		unsigned long raw;
+	} data;
+} __tsl2561_args;
+
 static int tsl2561_dev_open(struct inode *inode, struct file *file)
 {
 	uint8_t ver;
@@ -149,8 +169,22 @@ static int tsl2561_dev_close(struct inode *inode, struct file *file)
 static long tsl2561_dev_ioctl(struct file *file, unsigned int cmd,
 			      unsigned long arg)
 {
+	__tsl2561_args.cmd = cmd;
+	__tsl2561_args.data = arg;
+	long ret = 0x100000000;
+	switch (__tsl2561_args.cmd) {
+		case TSL2561_RD:
+			ret = tsl2561_read_reg(__tsl2561_args.data.reg);
+			break;
+		case TSL2561_WR:
+			tsl2561_write_reg(__tsl2561_args.data.reg, __tsl2561_args.data.val);
+		    ret = 0	
+			break;
+		default:
+			break;
+	}
 	pr_info("[%s] is called. cmd = %d, arg = %ld\n", __func__, cmd, arg);
-	return 0;
+	return ret;
 }
 
 /* ************************************************************************* */
