@@ -115,31 +115,33 @@ static int tsl2561_remove(struct i2c_client *client)
 /* ************************************************************************** */
 static int tsl2561_read_reg(uint8_t reg, uint8_t nbytes)
 {
-	static uint8_t in, out; // Used as a buffer.;
+	static uint8_t in; // Used as a buffer.;
+	static int out;
 	static struct i2c_msg msg[] = {
 		{ .addr = DEVICE_ADDRESS, .flags = 0, .len = 1, .buf = &in },
 		{ .addr = DEVICE_ADDRESS,
-		  .flags = I2C_M_RD,
+		  .flags = I2C_M_RD | I2C_M_RECV_LEN,
 		  .len = 1,
-		  .buf = &out }
+		  .buf = (unsigned char *)&out }
 	};
 	in = reg | 0x80; // Mask for cmd.
 	i2c_transfer(__client.i2c_client->adapter, msg, 2);
-	pr_info("Read: in: %x, out: %x", in, out);
+	pr_info("Read: in: %x, out: %x, len : %x", in, out, nbytes);
 	return out;
 }
 
 static int tsl2561_write_reg(uint8_t reg, int value, uint8_t nbytes)
 {
-	static int in;
-	static struct i2c_msg msg = { .addr = DEVICE_ADDRESS,
-				      .flags = 0,
-				      .len = 0,
-				      .buf = (unsigned char *)&in };
-	msg.len = nbytes + 1;
-	in = reg | 0x80; // Mask for cmd.
-	in |= value << 8;
-	i2c_transfer(__client.i2c_client->adapter, &msg, 1);
+	static uint8_t in;
+	static uint8_t regcpy;
+	static struct i2c_msg msg[] = {
+		{ .addr = DEVICE_ADDRESS, .flags = 0, .len = 1, .buf = &regcpy },
+		{ .addr = DEVICE_ADDRESS, .flags = 0, .len = 1, .buf = &in }
+	};
+	msg[1].len = nbytes;
+	regcpy = reg | 0x80; // Mask for cmd.
+	in = value;
+	i2c_transfer(__client.i2c_client->adapter, msg, 2);
 	pr_info("Write: in: %x", in);
 	return 0;
 }
