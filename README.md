@@ -13,13 +13,11 @@ For this project the following hardware has been used
 
 Essentially, the connection diagram is as follows:
 ```mermaid
-flowchart LR
-A --> B
+graph LR
+
+LinuxHost --WiFi --> Tritium-H3 <--I2C--> TSL2561
 ```
 
-```plantuml
-A --> B
-```
 
 ## Development Environment
 To compile and build the module, this project features a Dockerfile to easily
@@ -36,6 +34,27 @@ To get it working, simply run `scripts/docker_build.sh` the first time and
 second command will open up a terminal ready to run `make` and build the module.
 If curious about what's that doing, everything related to the environment built
 is within the [docker](./docker/) directory.
+Note that the module is built `Out of Tree`
+
+Essentially, what happens in the development process can be described by the following chart
+
+```mermaid
+flowchart LR
+    subgraph Host
+        module.ko
+    end
+    subgraph Docker
+        SunxiHeaders --> Compiler
+        subgraph Toolchain
+            Compiler --> module.ko
+        end
+    end
+    subgraph Host
+        Makefile --> Compiler 
+        module.c --> Compiler
+    end
+```
+
 
 
 ## Embedded Linux
@@ -64,13 +83,74 @@ stdoutput of Armbians's compile.sh command to a text file, and searched through
 the logs until I found which headers were used. Is there a better way? Probably,
 but that's what worked for me.
 
-## Driver Implementation
+## Driver 
+
+### Overview
+The driver module has been implemented so that only the bare minimum knowledge
+of the TSL2561 chip is held inside the .c source code. The goal here is to
+provide a way to read and write the device's registers easily, so that 
+whoever uses the device file from "the outside" can deal with modeling the
+sensor and its registers as they see fit.
+
+As an example, apart from the driver itself, a small Python library that uses 
+the device file and reads some registers has also been developed as part of 
+this project. 
+
+### Module Source
+The driver is comprised of 4 blocks, that can be seen by inspecting the main
+structure defined in the source code:
+```c
+struct tsl2561_client {
+	struct miscdevice *miscdev;
+	struct file_operations *file_ops;
+	struct i2c_driver *i2c_driver;
+	struct i2c_client *i2c_client;
+};
+```
+From we can learn that the driver:
+- Is implemented as a miscdevice. 
+- Defines a subset (or all) supported file operations.
+- Is an I2C device.
+
+The driver itself holds a static instance of `tsl2561` where the aforementioned 
+resources are stored.
+
+### Miscdevice
+Nothing too fancy here, just the usual boilerplate code required to make our 
+char device a proper `miscdevice`. 
+
+### I2C Device
+Again, nothing too fancy, mostly boileplate code. The `miscdevice` instance
+is created within the `probe` section of the I2C device code, where the client
+and driver details are also stored for use in the file operations.
+
+### File Operations
+Here's where the fun begins. The file operations define how our device will
+be managed and used through its device file. In particular a protocol was
+defined to send and receive commands from Python (or any other external tool).  
+
+
+## Application
+Merging everything together, the main architecture of this project ends up
+being something like this
 
 
 
-
-
-
-
-
-
+```mermaid
+flowchart TB
+    User --> App
+    subgraph Python
+        App --> TSL2561Class
+        TSL2561Class --> TSL2561BusHandler
+    end
+    subgraph OperatingSystem
+        IOCTL --> DeviceFile
+        DeviceFile --> Module
+        Module --> I2CBus
+    end
+    subgraph Hardware
+        TSL2561 
+    end
+    TSL2561BusHandler --> IOCTL
+    I2CBus --> TSL2561
+```
