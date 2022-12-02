@@ -115,6 +115,7 @@ static int tsl2561_remove(struct i2c_client *client)
 /* ************************************************************************** */
 static int tsl2561_read_reg(uint8_t reg, uint8_t nbytes)
 {
+	// TODO: support nbytes
 	static uint8_t in; // Used as a buffer.;
 	static int out;
 	static struct i2c_msg msg[] = {
@@ -132,6 +133,7 @@ static int tsl2561_read_reg(uint8_t reg, uint8_t nbytes)
 
 static int tsl2561_write_reg(uint8_t reg, int value, uint8_t nbytes)
 {
+	// TODO: support nbytes
 	static uint8_t in;
 	static uint8_t regcpy;
 	static struct i2c_msg msg[] = {
