@@ -97,8 +97,7 @@ the device file and reads some registers has also been developed as part of
 this project. 
 
 ### Module Source
-The driver is comprised of 4 blocks, that can be seen by inspecting the main
-structure defined in the source code:
+The driver is comprised of 4 blocks, that can be seen by inspecting the main [structure](./src/tsl2561_driver.c#L32-L37) defined in the source code:
 ```c
 struct tsl2561_client {
 	struct miscdevice *miscdev;
