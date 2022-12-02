@@ -1,0 +1,17 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "allwinner,sun50i-a64", "allwinner,sun50i-h5";
+
+	fragment@0 {
+		target = <&i2c1>;
+		__overlay__ {
+			tsl2561@40 {
+				compatible = "mse,tsl2561";
+				reg = <0x49>;
+				status = "okay";
+			};
+		};
+	};
+};
