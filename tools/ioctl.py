@@ -5,21 +5,6 @@ from enum import IntEnum
 from fcntl import ioctl
 from typing import Dict, Literal
 
-# **************************************************************************** #
-#                           Linux Driver Definitions                           #
-# **************************************************************************** #
-DEV_NAME = '/dev/tsl2561'
-CMD_ID = 100
-
-
-class TSL2561XferMode(IntEnum):
-    BYTE = 1
-    WORD = 2
-
-
-class TSL2561IoctlOp(IntEnum):
-    WR = 0
-    RD = 1
 
 
 # **************************************************************************** #
@@ -49,6 +34,32 @@ class TSL2561Version:
     revno: int
     partno: TSL2561PartNo
 
+# **************************************************************************** #
+#                           Linux Driver Definitions                           #
+# **************************************************************************** #
+DEV_NAME = '/dev/tsl2561'
+CMD_ID = 100
+
+@dataclass
+class TSL2561Command:
+    class Mode(IntEnum):
+        BYTE = 1
+        WORD = 2
+    class Operation(IntEnum):
+        WR = 0
+        RD = 1
+    operation: Operation 
+    reg: TSL2561Regs
+    data: int = 0
+    xfer_mode: Mode = Mode.BYTE 
+
+    def serialize(self) -> int:
+        res = 0x00000000
+        fields = (self.xfer_mode, self.operation, self.reg, self.data)
+        for i, val in enumerate(fields):
+            res |= (val & 0xFF) << (i * 8)
+        return int(res)
+
 
 # **************************************************************************** #
 #                                 Abstractions                                 #
@@ -60,34 +71,16 @@ class TSL2561DriverBusHandler:
             raise SystemError('Device or Kernel Module unavailable.')
         self.dev_name = file_dev_name
 
-    def write_reg(self,
-                  reg: TSL2561Regs,
-                  val,
-                  size: TSL2561XferMode = TSL2561XferMode.BYTE):
-        self.__xfer(TSL2561IoctlOp.WR, reg, val, size)
+    def write_reg(self, reg: TSL2561Regs, val):
+        self.__xfer(TSL2561Command(TSL2561Command.Operation.WR, reg, val))
 
-    def read_reg(self,
-                 reg: TSL2561Regs,
-                 size: TSL2561XferMode = TSL2561XferMode.BYTE) -> int:
-        return self.__xfer(TSL2561IoctlOp.RD, reg, size)
+    def read_reg(self, reg: TSL2561Regs) -> int:
+        return self.__xfer(TSL2561Command(TSL2561Command.Operation.RD, reg))
 
-    def __xfer(self,
-               cmd: TSL2561IoctlOp,
-               reg: TSL2561Regs,
-               val: int = 0,
-               size: TSL2561XferMode = TSL2561XferMode.BYTE) -> int:
+    def __xfer(self, cmd:TSL2561Command) -> int:
         with open(DEV_NAME, 'r') as dev:
-            msg = self.__build_message(size, cmd, reg, val)
-            res = ioctl(dev, CMD_ID, msg)
+            res = ioctl(dev, CMD_ID, cmd.serialize())
         return res
-
-    @staticmethod
-    def __build_message(*args: int):
-        res = 0x00000000
-        for i, val in enumerate(args):
-            res |= (val & 0xFF) << (i * 8)
-        return int(res)
-
 
 class TSL2561:
 

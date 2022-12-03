@@ -3,40 +3,44 @@ TSL2561 I2C Light Sensor driver implemented as a Kernel Module for ARM64
 architecture.
 
 ## Overview
-This project was build to display how to develop a simple I2C Subsystem Driver
-with a concrete I2C device connected to an SBC.
+This project was build to show how to develop a simple I2C Subsystem Driver
+using a concrete example, wish a dash of software engineering spice.
+
 
 ## Hardware
 For this project the following hardware has been used
-1. **SBC**: Libretech Tritium H3 (Allwinner H5 version)
-1. **Sensor**: TSL2561 Light Sensor Adafruit Kit 
+1. **Host**: Ubuntu 20.04 Laptop.
+1. **SBC**: Libretech Tritium H3 (Allwinner H5 version), running Armbian.
+1. **I2C Sensor**: TSL2561 Light Sensor Adafruit Kit.
 
 Essentially, the connection diagram is as follows:
 ```mermaid
 graph LR
-
-LinuxHost --WiFi --> Tritium-H3 <--I2C--> TSL2561
+LinuxHost --WiFi --- Tritium-H3 --I2C --- TSL2561
 ```
 
 
 ## Development Environment
-To compile and build the module, this project features a Dockerfile to easily
-build a suitable development environment. There are multiple reasons for this:
+To compile and build the module, this project uses Docker. Thus, it comes with a [Dockerfile](./docker/Dockerfile) to easily
+build a suitable conntainerized development environment. There are multiple reasons for this:
 1. The exact toolchain and Linux headers are downloaded and installed in the
-environment when the image is build. This leaves no room for the user to 
-obtain the wrong toolchain or headers version.
+environment when the image is build, leaving no room for 
+obtaining the wrong toolchain or downloading incorrect header versions.
 1. The host computer doesn't need to natively install headers or crosscompilers
-that will (probably) be only useful for this project. It also reduces the 
+that will (probably) be only useful for the scope of thisproject. It also reduces the 
 chances of breaking anything in the host computer.
 
+### Instructions
 To get it working, simply run `scripts/docker_build.sh` the first time and 
 `scripts/docker_run.sh` each time compilation of the module is needed. The
 second command will open up a terminal ready to run `make` and build the module.
 If curious about what's that doing, everything related to the environment built
 is within the [docker](./docker/) directory.
-Note that the module is built `Out of Tree`
+Note that the module is built `Out of Tree`. Once built, it can be transferred to the SBC through SCP or any other method.
 
-This chart sums up the devlopment workflow
+### Workflow Summary
+Essentially, the devopment workflow is depicted by the following diagram:
+
 ```mermaid
 flowchart LR
     subgraph Host
@@ -138,8 +142,6 @@ defined to send and receive commands from Python (or any other external tool).
 ## Application
 Merging everything together, the main architecture of this project ends up
 being something like this
-
-
 
 ```mermaid
 flowchart TB
