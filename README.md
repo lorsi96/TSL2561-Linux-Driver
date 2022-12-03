@@ -36,8 +36,7 @@ If curious about what's that doing, everything related to the environment built
 is within the [docker](./docker/) directory.
 Note that the module is built `Out of Tree`
 
-Essentially, what happens in the development process can be described by the following chart
-
+This chart sums up the devlopment workflow
 ```mermaid
 flowchart LR
     subgraph Host
@@ -53,6 +52,13 @@ flowchart LR
         Makefile --> Compiler 
         module.c --> Compiler
     end
+    subgraph SBC
+        insmod --> Test
+        Test --> rmmod
+        rmmod
+
+    end
+    module.ko -.scp .-> insmod
 ```
 
 
@@ -126,7 +132,7 @@ and driver details are also stored for use in the file operations.
 ### File Operations
 Here's where the fun begins. The file operations define how our device will
 be managed and used through its device file. In particular a protocol was
-defined to send and receive commands from Python (or any other external tool).  
+defined to send and receive commands from Python (or any other external tool).
 
 
 ## Application
