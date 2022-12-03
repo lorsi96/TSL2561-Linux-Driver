@@ -5,8 +5,6 @@ from enum import IntEnum
 from fcntl import ioctl
 from typing import Dict, Literal
 
-
-
 # **************************************************************************** #
 #                               Chip Definitions                               #
 # **************************************************************************** #
