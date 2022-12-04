@@ -19,6 +19,8 @@ graph LR
 LinuxHost --WiFi --- Tritium-H3 --I2C --- TSL2561
 ```
 
+A not so tidy picture of the hardware setup can be seen below.
+![](images/setup.png)  
 
 ## Development Environment
 To compile and build the module, this project uses Docker. Thus, it comes with a [Dockerfile](./docker/Dockerfile) to easily
