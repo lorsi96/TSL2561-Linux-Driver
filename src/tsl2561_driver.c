@@ -197,9 +197,10 @@ static long tsl2561_dev_ioctl(struct file *file, unsigned int cmd,
 	default:
 		break;
 	}
-	pr_info("op %x; len %x; reg %x, var %x", __tsl2561_args.op,
-		__tsl2561_args.len, __tsl2561_args.reg, __tsl2561_args.val);
 	pr_info("[%s] is called. cmd = %d, arg = %lx\n", __func__, cmd, arg);
+	pr_info("TSL2561 Command Received: op %x; len %x; reg %x, var %x",
+		__tsl2561_args.op, __tsl2561_args.len, __tsl2561_args.reg,
+		__tsl2561_args.val);
 	return ret;
 }
 
